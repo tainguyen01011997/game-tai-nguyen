@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ai nhanh hơn Tài Nguyện?</title>
+  <style>
+    body {
+      text-align: center;
+      font-family: 'Segoe UI', sans-serif;
+      background: #fff3e0;
+      padding: 40px;
+    }
+    h1 {
+      color: #e91e63;
+    }
+    #color-name {
+      font-size: 36px;
+      margin: 20px;
+      font-weight: bold;
+    }
+    .btn {
+      width: 100px;
+      height: 100px;
+      margin: 10px;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+    .btn:hover {
+      transform: scale(1.05);
+    }
+    #status {
+      margin-top: 30px;
+      font-size: 24px;
+    }
+    #score, #highscore, #level {
+      margin-top: 10px;
+      font-size: 18px;
+      color: #4caf50;
+    }
+    #startBtn {
+      padding: 12px 20px;
+      font-size: 16px;
+      border: none;
+      background: #e91e63;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    #playerName {
+      font-size: 18px;
+      padding: 8px;
+      width: 220px;
+      border-radius: 8px;
+      border: 2px solid #e91e63;
+      margin-bottom: 10px;
+    }
+    #leaderboard {
+      margin-top: 40px;
+      max-width: 300px;
+      margin-left: auto;
+      margin-right: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1);
+    }
+    #leaderboard h2 {
+      color: #e91e63;
+    }
+    #leaderboardList {
+      list-style: none;
+      padding: 0;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+      font-size: 16px;
+    }
+    #leaderboardList li {
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🎯 Ai nhanh hơn Tài Nguyện?</h1>
+
+  <input type="text" id="playerName" placeholder="Nhập tên của bạn" maxlength="20" />
+  <br/>
+  <button id="startBtn">▶️ Bắt đầu chơi</button>
+
+  <div id="score">Điểm: 0</div>
+  <div id="highscore">🎖 Kỷ lục: 0</div>
+  <div id="level">Cấp độ: 1</div>
+
+  <div id="color-name">🏁 Ai nhanh hơn Tài Nguyện?</div>
+  <div id="buttons"></div>
+  <div id="status"></div>
+
+  <div id="leaderboard">
+    <h2>Bảng xếp hạng</h2>
+    <ul id="leaderboardList">
+      <li>Đang tải...</li>
+    </ul>
+  </div>
+
+  <!-- Âm thanh -->
+  <audio id="sound-correct" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_bf30f3e77a.mp3?filename=correct-2-46134.mp3"></audio>
+  <audio id="sound-wrong" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_1b96f1341f.mp3?filename=fail-1-89190.mp3"></audio>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <script>
+    // === Cấu hình Firebase (thay bằng cấu hình của bạn lấy từ Firebase Console) ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyD6OM8Q7t2EzRTFF05-lFOEITuwkv7HQTM",
+      authDomain: "game-tai-nguyen.firebaseapp.com",
+      databaseURL: "https://game-tai-nguyen-default-rtdb.firebaseio.com",
+      projectId: "game-tai-nguyen",
+      storageBucket: "game-tai-nguyen.appspot.com",
+      messagingSenderId: "921781660410",
+      appId: "1:921781660410:web:c54d7d9fdca41f486a3743"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // === Biến game ===
+    const colors = [
+      { name: "Đỏ", value: "#f44336" },
+      { name: "Xanh lá", value: "#4caf50" },
+      { name: "Xanh dương", value: "#2196f3" },
+      { name: "Vàng", value: "#ffeb3b" },
+      { name: "Tím", value: "#9c27b0" }
+    ];
+
+    let correctColor = "";
+    let score = 0;
+    let highScore = localStorage.getItem("highScore") || 0;
+    let level = 1;
+    let timeout;
+    let currentTimeLimit = 2000;
+    let playerName = "";
+
+    const playerNameInput = document.getElementById("playerName");
+    const colorNameEl = document.getElementById("color-name");
+    const buttonsEl = document.getElementById("buttons");
+    const statusEl = document.getElementById("status");
+    const scoreEl = document.getElementById("score");
+    const highScoreEl = document.getElementById("highscore");
+    const levelEl = document.getElementById("level");
+    const startBtn = document.getElementById("startBtn");
+    const leaderboardList = document.getElementById("leaderboardList");
+
+    const correctSound = document.getElementById("sound-correct");
+    const wrongSound = document.getElementById("sound-wrong");
+
+    startBtn.onclick = startGame;
+
+    function startGame() {
+      playerName = playerNameInput.value.trim();
+      if (!playerName) {
+        alert("Vui lòng nhập tên của bạn trước khi bắt đầu!");
+        return;
+      }
+      score = 0;
+      level = 1;
+      currentTimeLimit = 2000;
+      updateStats();
+      statusEl.textContent = "";
+      colorNameEl.textContent = "Bắt đầu rồi!";
+      startBtn.style.display = "none";
+      playerNameInput.style.display = "none";
+      nextRound();
+    }
+
+    function nextRound() {
+      buttonsEl.innerHTML = "";
+      clearTimeout(timeout);
+
+      const shuffled = colors.sort(() => 0.5 - Math.random());
+      correctColor = shuffled[Math.floor(Math.random() * shuffled.length)];
+
+      colorNameEl.textContent = correctColor.name;
+      colorNameEl.style.color = shuffled[Math.floor(Math.random() * shuffled.length)].value;
+
+      shuffled.forEach(c => {
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.style.backgroundColor = c.value;
+        btn.onclick = () => checkAnswer(c.name);
+        buttonsEl.appendChild(btn);
+      });
+
+      timeout = setTimeout(() => {
+        endGame("⏱ Quá chậm!");
+      }, currentTimeLimit);
+    }
+
+    function checkAnswer(selected) {
+      clearTimeout(timeout);
+      if (selected === correctColor.name) {
+        correctSound.play();
+        score++;
+        if (score > highScore) {
+          highScore = score;
+          localStorage.setItem("highScore", highScore);
+        }
+        if (score % 5 === 0) level++;
+        currentTimeLimit = Math.max(currentTimeLimit - 20, 300);
+        updateStats();
+        nextRound();
+      } else {
+        endGame(`❌ Bạn chọn "${selected}", đúng là "${correctColor.name}"`);
+      }
+    }
+
+    function updateStats() {
+      scoreEl.textContent = `Điểm: ${score}`;
+      highScoreEl.textContent = `🎖 Kỷ lục: ${highScore}`;
+      levelEl.textContent = `Cấp độ: ${level}`;
+    }
+
+    function endGame(message) {
+      wrongSound.play();
+      document.body.classList.add("shake");
+      setTimeout(() => document.body.classList.remove("shake"), 300);
+      colorNameEl.textContent = "🛑 Game Over!";
+      statusEl.innerHTML = `😅 Bạn quá cùi bắp so với Tài Nguyện rồi hehehe<br>🔥 Tổng điểm: <b>${score}</b><br>${message}`;
+      buttonsEl.innerHTML = "";
+      startBtn.style.display = "inline-block";
+      playerNameInput.style.display = "inline-block";
+      updateStats();
+      saveScoreOnline(playerName, score);
+      updateLeaderboard();
+    }
+
+    // Hiệu ứng rung
+    const style = document.createElement("style");
+    style.innerHTML = `
+      .shake {
+        animation: shake 0.3s;
+      }
+      @keyframes shake {
+        0% { transform: translate(1px, 1px); }
+        20% { transform: translate(-2px, -2px); }
+        40% { transform: translate(3px, 1px); }
+        60% { transform: translate(-1px, 2px); }
+        80% { transform: translate(2px, -1px); }
+        100% { transform: translate(0, 0); }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Lưu điểm lên Firebase
+    function saveScoreOnline(name, score) {
+      const scoresRef = db.ref("scores");
+      const newScoreRef = scoresRef.push();
+      newScoreRef.set({
+        name: name,
+        score: score,
+        timestamp: Date.now()
+      });
+    }
+
+    // Lấy và cập nhật bảng xếp hạng từ Firebase
+    function updateLeaderboard() {
+      const scoresRef = db.ref("scores").orderByChild("score").limitToLast(10);
+      scoresRef.once("value", snapshot => {
+        const scores = [];
+        snapshot.forEach(childSnapshot => {
+          scores.push(childSnapshot.val());
+        });
+        // Sắp xếp giảm dần điểm
+        scores.sort((a,b) => b.score - a.score);
+        leaderboardList.innerHTML = "";
+        if(scores.length === 0){
+          leaderboardList.innerHTML = "<li>Chưa có dữ liệu</li>";
+          return;
+        }
+        scores.forEach((entry, idx) => {
+          const li = document.createElement("li");
+          li.textContent = `${idx+1}. ${entry.name} — ${entry.score} điểm`;
+          leaderboardList.appendChild(li);
+        });
+      });
+    }
+
+    // Cập nhật bảng xếp hạng khi tải trang
+    updateLeaderboard();
+    highScoreEl.textContent = "🎖 Kỷ lục: " + highScore;
+
+  </script>
+
+</body>
+</html>
